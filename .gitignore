@@ -33,3 +33,13 @@ ckpts*
 
 # Demo
 serve_images/
+
+# Local training/evaluation artifacts
+__pycache__/
+*.pyc
+.env
+.env.*
+checkpoints/
+*.safetensors
+*.pt
+*.pth

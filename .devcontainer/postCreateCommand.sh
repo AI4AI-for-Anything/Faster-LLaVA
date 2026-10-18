@@ -7,8 +7,8 @@ echo "export AZCOPY_CONCURRENCY_VALUE=AUTO" >> ~/.zshrc
 echo "export AZCOPY_CONCURRENCY_VALUE=AUTO" >> ~/.bashrc
 
 # Activate conda by default
-echo ". /home/vscode/miniconda3/bin/activate" >> ~/.zshrc
-echo ". /home/vscode/miniconda3/bin/activate" >> ~/.bashrc
+echo '. "$HOME/miniconda3/bin/activate"' >> ~/.zshrc
+echo '. "$HOME/miniconda3/bin/activate"' >> ~/.bashrc
 
 # Use llava environment by default
 echo "conda activate llava" >> ~/.zshrc
@@ -19,7 +19,7 @@ echo 'export PATH="$PATH:$HOME/.dotnet"' >> ~/.bashrc
 echo 'export PATH="$PATH:$HOME/.dotnet"' >> ~/.zshrc
 
 # Create and activate llava environment
-source /home/vscode/miniconda3/bin/activate
+source "$HOME/miniconda3/bin/activate"
 conda create -y -q -n llava python=3.10
 conda activate llava
 

@@ -689,7 +689,50 @@ class LazySupervisedDataset(Dataset):
             length_list.append(cur_len)
         return length_list
 
+    @property
+    def token_modality_lengths(self):
+        """Signed lengths of the exact tokenized training examples.
+
+        This is opt-in because constructing the sampler is otherwise cheap.  The
+        conversation is copied and tokenized exactly as __getitem__ does, but
+        images are not opened: only the sequence length is needed for bucketing.
+        The sign and modality split remain identical to modality_lengths.
+        """
+        cached = getattr(self, "_token_modality_lengths", None)
+        if cached is not None:
+            return cached
+        lengths = []
+        for sample in self.list_data_dict:
+            sources = copy.deepcopy([sample["conversations"]])
+            has_image = "image" in sample
+            if has_image:
+                sources = preprocess_multimodal(sources, self.data_args)
+            data = preprocess(sources, self.tokenizer, has_image=has_image)
+            n = int(data["input_ids"][0].ne(self.tokenizer.pad_token_id).sum())
+            lengths.append(n if has_image else -n)
+        self._token_modality_lengths = lengths
+        return lengths
+
+    @property
+    def token_label_lengths(self):
+        cached = getattr(self, "_token_label_lengths", None)
+        if cached is not None:
+            return cached
+        lengths = []
+        for sample in self.list_data_dict:
+            sources = copy.deepcopy([sample["conversations"]])
+            has_image = "image" in sample
+            if has_image:
+                sources = preprocess_multimodal(sources, self.data_args)
+            data = preprocess(sources, self.tokenizer, has_image=has_image)
+            lengths.append(int((data["labels"][0] != IGNORE_INDEX).sum()))
+        self._token_label_lengths = lengths
+        return lengths
+
     def __getitem__(self, i) -> Dict[str, torch.Tensor]:
+        total = None
+        if isinstance(i, tuple):
+            i, total = i
         sources = self.list_data_dict[i]
         if isinstance(i, int):
             sources = [sources]
@@ -728,6 +771,8 @@ class LazySupervisedDataset(Dataset):
         if isinstance(i, int):
             data_dict = dict(input_ids=data_dict["input_ids"][0],
                              labels=data_dict["labels"][0])
+            if total is not None:
+                data_dict["_global_label_total"] = total
 
         # image exist in the data
         if 'image' in self.list_data_dict[i]:
@@ -762,6 +807,9 @@ class DataCollatorForSupervisedDataset(object):
             labels=labels,
             attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
         )
+        totals = [x.get("_global_label_total") for x in instances]
+        if totals and totals[0] is not None and all(x == totals[0] for x in totals):
+            batch["_global_label_total"] = totals[0]
 
         if 'image' in instances[0]:
             images = [instance['image'] for instance in instances]

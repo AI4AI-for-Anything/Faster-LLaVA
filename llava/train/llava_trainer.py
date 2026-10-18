@@ -45,6 +45,45 @@ def split_to_even_chunks(indices, lengths, num_chunks):
 
     num_indices_per_chunk = len(indices) // num_chunks
 
+    if os.environ.get("LLAVA_TOKEN_LENGTH_GROUPING") == "1":
+        if os.environ.get("LLAVA_BALANCE_STEP") == "1":
+            # Packed decoder work follows valid tokens rather than padded rows.
+            # Balance all micro-batches in this step together, retaining the
+            # fixed sample count and the exact input membership.
+            buckets = [[] for _ in range(num_chunks)]
+            loads = [0] * num_chunks
+            for i in sorted(indices, key=lambda i: abs(lengths[i]), reverse=True):
+                slot = min((j for j in range(num_chunks)
+                            if len(buckets[j]) < num_indices_per_chunk),
+                           key=lambda j: loads[j])
+                buckets[slot].append(i)
+                loads[slot] += abs(lengths[i])
+            return buckets
+        if os.environ.get("LLAVA_BALANCE_MICROSTEP") == "1" and num_chunks % 2 == 0:
+            # Keep the two length ranges separate, then balance valid-token
+            # work across ranks within each micro-step. Each bucket keeps the
+            # same fixed number of samples.
+            ordered = sorted(indices, key=lambda i: abs(lengths[i]), reverse=True)
+            per_wave = num_chunks // 2
+            result = []
+            for start in range(0, len(ordered), per_wave * num_indices_per_chunk):
+                buckets = [[] for _ in range(per_wave)]
+                loads = [0] * per_wave
+                for i in ordered[start:start + per_wave * num_indices_per_chunk]:
+                    slot = min((j for j in range(per_wave)
+                                if len(buckets[j]) < num_indices_per_chunk),
+                               key=lambda j: loads[j])
+                    buckets[slot].append(i)
+                    loads[slot] += abs(lengths[i])
+                result.extend(buckets)
+            return result
+        # Padding work is set by each micro-batch's longest sequence.  Keeping
+        # adjacent entries together therefore concentrates long examples and
+        # minimizes the sum of those eight maxima, while preserving 16 rows per
+        # micro-batch and the 128-sample step membership.
+        return [indices[i * num_indices_per_chunk:(i + 1) * num_indices_per_chunk]
+                for i in range(num_chunks)]
+
     chunks = [[] for _ in range(num_chunks)]
     chunks_lengths = [0 for _ in range(num_chunks)]
     for index in indices:
@@ -109,6 +148,7 @@ class LengthGroupedSampler(Sampler):
         lengths: Optional[List[int]] = None,
         generator=None,
         group_by_modality: bool = False,
+        dataset=None,
     ):
         if lengths is None:
             raise ValueError("Lengths must be provided.")
@@ -118,6 +158,7 @@ class LengthGroupedSampler(Sampler):
         self.lengths = lengths
         self.generator = generator
         self.group_by_modality = group_by_modality
+        self.dataset = dataset
 
     def __len__(self):
         return len(self.lengths)
@@ -127,10 +168,34 @@ class LengthGroupedSampler(Sampler):
             indices = get_modality_length_grouped_indices(self.lengths, self.batch_size, self.world_size, generator=self.generator)
         else:
             indices = get_length_grouped_indices(self.lengths, self.batch_size, self.world_size, generator=self.generator)
+        if os.environ.get("LLAVA_GLOBAL_TOKEN_LOSS") == "1" and self.dataset is not None:
+            totals = self.dataset.token_label_lengths
+            annotated_indices = []
+            step = self.batch_size * self.world_size
+            for off in range(0, len(indices), step):
+                block = indices[off:off + step]
+                total = sum(totals[i] for i in block)
+                for i in block:
+                    annotated_indices.append((i, total))
+            return iter(annotated_indices)
         return iter(indices)
 
 
+
 class LLaVATrainer(Trainer):
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        total = inputs.pop("_global_label_total", None)
+        local = int((inputs["labels"] != -100).sum().item()) if total is not None else None
+        out = super().compute_loss(model, inputs, return_outputs=return_outputs)
+        if total is not None and os.environ.get("LLAVA_GLOBAL_TOKEN_LOSS") == "1":
+            scale = (self.args.gradient_accumulation_steps * self.args.world_size * local) / max(int(total), 1)
+            if return_outputs:
+                loss, outputs = out
+                out = (loss * scale, outputs)
+            else:
+                out = out * scale
+        return out
 
     def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
         if self.train_dataset is None or not has_length(self.train_dataset):
@@ -138,12 +203,16 @@ class LLaVATrainer(Trainer):
 
         if self.args.group_by_modality_length:
             lengths = self.train_dataset.modality_lengths
-            return LengthGroupedSampler(
+            if os.environ.get("LLAVA_TOKEN_LENGTH_GROUPING") == "1":
+                lengths = self.train_dataset.token_modality_lengths
+            sampler = LengthGroupedSampler(
                 self.args.train_batch_size,
                 world_size=self.args.world_size * self.args.gradient_accumulation_steps,
                 lengths=lengths,
                 group_by_modality=True,
+                dataset=self.train_dataset,
             )
+            return sampler
         else:
             return super()._get_train_sampler()
 

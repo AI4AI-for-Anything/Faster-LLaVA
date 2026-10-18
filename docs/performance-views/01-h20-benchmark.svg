@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="648pt" height="324pt" viewBox="0 0 648 324" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.10.8, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 324
+L 648 324
+L 648 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 129.6 246.24
+L 408.24 246.24
+L 408.24 100.44
+L 129.6 100.44
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <path d="M 129.6 246.24
+L 129.6 100.44
+" clip-path="url(#pce56557757)" style="fill: none; stroke: #eadfe0; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_2"/>
+     <g id="text_1">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #79696b" x="129.6" y="262.838437" transform="rotate(-0 129.6 262.838437)">0</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_3">
+      <path d="M 178.484211 246.24
+L 178.484211 100.44
+" clip-path="url(#pce56557757)" style="fill: none; stroke: #eadfe0; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_4"/>
+     <g id="text_2">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #79696b" x="178.484211" y="262.838437" transform="rotate(-0 178.484211 262.838437)">5,000</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_5">
+      <path d="M 227.368421 246.24
+L 227.368421 100.44
+" clip-path="url(#pce56557757)" style="fill: none; stroke: #eadfe0; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_6"/>
+     <g id="text_3">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #79696b" x="227.368421" y="262.838437" transform="rotate(-0 227.368421 262.838437)">10,000</text>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_7">
+      <path d="M 276.252632 246.24
+L 276.252632 100.44
+" clip-path="url(#pce56557757)" style="fill: none; stroke: #eadfe0; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_8"/>
+     <g id="text_4">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #79696b" x="276.252632" y="262.838437" transform="rotate(-0 276.252632 262.838437)">15,000</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_9">
+      <path d="M 325.136842 246.24
+L 325.136842 100.44
+" clip-path="url(#pce56557757)" style="fill: none; stroke: #eadfe0; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_10"/>
+     <g id="text_5">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #79696b" x="325.136842" y="262.838437" transform="rotate(-0 325.136842 262.838437)">20,000</text>
+     </g>
+    </g>
+    <g id="text_6">
+     <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #79696b" x="268.92" y="285.276406" transform="rotate(-0 268.92 285.276406)">Time per optimizer step (ms) ↓</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_11"/>
+     <g id="text_7">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #79696b" x="120.6" y="144.002855" transform="rotate(-0 120.6 144.002855)">Reference</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_12"/>
+     <g id="text_8">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #79696b" x="120.6" y="210.275582" transform="rotate(-0 120.6 210.275582)">Faster-LLaVA</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 129.6 246.24
+L 408.24 246.24
+" style="fill: none; stroke: #eadfe0; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 129.6 148.156364
+L 334.270368 148.156364
+L 334.270368 132.250909
+L 129.6 132.250909
+z
+" clip-path="url(#pce56557757)" style="fill: #d7bdbf"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 129.6 214.429091
+L 215.412321 214.429091
+L 215.412321 198.523636
+L 129.6 198.523636
+z
+" clip-path="url(#pce56557757)" style="fill: #8c0000"/>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 700; font-size: 11.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #292122" x="339.647631" y="143.376918" transform="rotate(-0 339.647631 143.376918)">20,934.2 ms</text>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 11.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #292122" x="220.789584" y="209.649645" transform="rotate(-0 220.789584 209.649645)">8,777.1 ms</text>
+   </g>
+  </g>
+  <g id="text_11">
+   <text style="font-weight: 700; font-size: 19px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #8c0000" x="38.88" y="38.88" transform="rotate(-0 38.88 38.88)">Faster-LLaVA, optimized by AI agents</text>
+  </g>
+  <g id="text_12">
+   <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #79696b" x="38.88" y="71.28" transform="rotate(-0 38.88 71.28)">LLaVA-1.5-7B · 4 H20 GPUs · global batch 128 · BF16 / TF32 / ZeRO-3</text>
+  </g>
+  <g id="text_13">
+   <text style="font-weight: 700; font-size: 35px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #8c0000" x="550.8" y="149.04" transform="rotate(-0 550.8 149.04)">2.39×</text>
+  </g>
+  <g id="text_14">
+   <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #79696b" x="550.8" y="184.68" transform="rotate(-0 550.8 184.68)">step speedup</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pce56557757">
+   <rect x="129.6" y="100.44" width="278.64" height="145.8"/>
+  </clipPath>
+ </defs>
+</svg>

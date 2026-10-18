@@ -1,4 +1,77 @@
-# 🌋 LLaVA: Large Language and Vision Assistant
+# Faster-LLaVA
+
+[English](README.md) | [简体中文](README.zh-CN.md)
+
+**2.39× faster LLaVA-1.5-7B training steps on H20 GPUs, optimized by AI agents.**
+
+![Faster-LLaVA: 2.39× training-step speedup on four H20 GPUs](docs/performance-views/01-h20-benchmark.svg)
+
+| Implementation | Time / optimizer step (ms) ↓ | Speedup ↑ |
+|---|---:|---:|
+| Reference | 20,934.2 | 1.00× |
+| **Faster-LLaVA** | **8,777.1** | **2.39×** |
+
+Measured in a short benchmark on **4×H20**, batch 16 per GPU, accumulation 2.
+
+## Quick Start
+
+Prepare the [environment, public data and model weights](docs/training.md). **Before the first trial run, have your agent check available GPU memory and adjust microbatch size and gradient accumulation** following the [memory adaptation guide](docs/training.md#memory). The default stage-two fine-tuning configuration uses **8 GPUs**, 16 examples per GPU and global batch 128:
+
+```bash
+export LLAVA_ASSETS=/path/to/assets
+export LLAVA_IMAGES=/path/to/images
+export LLAVA_OUTPUT=/path/to/new-output
+bash scripts/train_faster_7b.sh
+```
+
+For another GPU count or memory budget, set `NPROC`, `MICROBATCH` and `GRAD_ACCUM` so their product remains **128**. See [memory adaptation and reproduction](docs/training.md#memory).
+
+## Agent Optimization History
+
+Measured on four H20 GPUs at global batch 128. The x axis has 28 steps: the 11 accepted speedup points of rounds 1–52, then every round from 53 to 69.
+
+![LLaVA optimization history, from 1.05× to 2.39×](docs/performance-views/02-history.svg)
+
+## What changed
+
+- **Data and loss:** token-length grouping, step-wide load balancing and global supervised-token loss normalization.
+- **Decoder:** packed attention and decoder layers, fused RMSNorm / SwiGLU / RoPE, and selective activation retention.
+- **Memory and communication:** SwiGLU backward recomputation, supervised-row output loss and ZeRO-3 parameter persistence.
+
+![Optimization map: sampling, packed decoder, memory and communication](docs/change-views/module-map.svg)
+
+See the [12-file change review](docs/change-views/files.md) and the exact [optimization switches](scripts/configs/faster_7b.sh). These changes affect the numerical trajectory; they do not establish lossless acceleration.
+
+## Full-training results
+
+We completed **one epoch on all 665,298 instruction records**, using **8×H20**, global batch 128 and 5,198 optimizer steps. Trainer-reported runtime was **7 h 14 min**. The run starts from Vicuna-7B plus the official stage-one projector. The comparison checkpoint is the released [official LLaVA-v1.5-7B](https://huggingface.co/liuhaotian/llava-v1.5-7b), evaluated under the same protocol for each row.
+
+The table presents **nine scored benchmark comparisons**.
+
+| Benchmark ↑ | Official checkpoint, same-protocol rerun | Our checkpoint |
+|---|---:|---:|
+| GQA testdev balanced | 61.91 | 62.35 |
+| VizWiz test | 50.42 | 51.89 |
+| ScienceQA-IMG | 67.82 | 68.52 |
+| TextVQA val 0.5.1 | 58.23 | 58.18 |
+| POPE macro F1 | 85.90 | 85.92 |
+| MMBench EN circular | 64.29 | 65.56 |
+| MMBench CN circular | 58.08 | 61.51 |
+| SEED full (19242) | 58.67 | 59.21 |
+| MM-Vet v1 | 33.24 | 33.85 |
+
+ScienceQA uses the original 2023 environment; SEED includes all 19,242 questions; VizWiz uses the full 8,000-question test. MM-Vet uses three runs per model with `gpt-6-luna-2026-09-22`, so it is not directly comparable with the paper's GPT-4 scores.
+
+See the [H20 results and evaluation protocol](docs/h20-results.md). A matched full-run H20 baseline has not been completed; the 2.39× headline comes from the separate four-GPU benchmark above.
+
+## Upstream LLaVA documentation
+
+Based on [haotian-liu/LLaVA](https://github.com/haotian-liu/LLaVA), by Haotian Liu, Chunyuan Li, Yuheng Li and Yong Jae Lee. [LLaVA-1.5 paper](https://arxiv.org/abs/2310.03744) · [Project page](https://llava-vl.github.io/) · [Apache-2.0 license](LICENSE).
+
+<details>
+<summary>Original LLaVA README: installation, models, training and evaluation</summary>
+
+## 🌋 LLaVA: Large Language and Vision Assistant
 
 *Visual instruction tuning towards large language and vision models with GPT-4 level capabilities.*
 
@@ -20,7 +93,7 @@
 
 ## Release
 
-- [2024/05/10] 🔥 **LLaVA-NeXT** (Stronger) models are released, stronger LMM with support of LLama-3 (8B) and Qwen-1.5 (72B/110B). [[Blog](https://llava-vl.github.io/blog/2024-05-10-llava-next-stronger-llms/)] [[Checkpoints](https://huggingface.co/collections/lmms-lab/llava-next-6623288e2d61edba3ddbf5ff)] [[Demo](https://llava-next.lmms-lab.com/)] [[Code](https://github.com/LLaVA-VL/LLaVA-NeXT/)] 
+- [2024/05/10] 🔥 **LLaVA-NeXT** (Stronger) models are released, stronger LMM with support of LLama-3 (8B) and Qwen-1.5 (72B/110B). [[Blog](https://llava-vl.github.io/blog/2024-05-10-llava-next-stronger-llms/)] [[Checkpoints](https://huggingface.co/collections/lmms-lab/llava-next-6623288e2d61edba3ddbf5ff)] [[Demo](https://llava-next.lmms-lab.com/)] [[Code](https://github.com/LLaVA-VL/LLaVA-NeXT/)]
 - [2024/05/10] 🔥 **LLaVA-NeXT** (Video) is released. The image-only-trained LLaVA-NeXT model is surprisingly strong on video tasks with zero-shot modality transfer. DPO training with AI feedback on videos can yield significant improvement. [[Blog](https://llava-vl.github.io/blog/2024-04-30-llava-next-video/)] [[Checkpoints](https://huggingface.co/collections/lmms-lab/llava-next-video-661e86f5e8dabc3ff793c944)] [[Code](https://github.com/LLaVA-VL/LLaVA-NeXT/)]
 - [03/10] Releasing **LMMs-Eval**, a highly efficient evaluation pipeline we used when developing LLaVA-NeXT. It supports the evaluation of LMMs on dozens of public datasets and allows new dataset onboarding, making the dev of new LMMs much faster. [[Blog](https://lmms-lab.github.io/lmms-eval-blog/lmms-eval-0.1/)] [[Codebase](https://github.com/EvolvingLMMs-Lab/lmms-eval)]
 - [1/30] 🔥 **LLaVA-NeXT** (LLaVA-1.6) is out! With additional scaling to LLaVA-1.5, LLaVA-NeXT-34B outperforms Gemini Pro on some benchmarks. It can now process 4x more pixels and perform more tasks/applications than before. Check out the [blog post](https://llava-vl.github.io/blog/2024-01-30-llava-next/), and explore the [demo](https://llava.hliu.cc/)! Models are available in [Model Zoo](https://github.com/haotian-liu/LLaVA/blob/main/docs/MODEL_ZOO.md). Training/eval data and scripts coming soon.
@@ -46,7 +119,7 @@
 
 - [7/19] 🔥 We release a major upgrade, including support for LLaMA-2, LoRA training, 4-/8-bit inference, higher resolution (336x336), and a lot more. We release [LLaVA Bench](https://github.com/haotian-liu/LLaVA/blob/main/docs/LLaVA_Bench.md) for benchmarking open-ended visual chat with results from Bard and Bing-Chat. We also support and verify training with RTX 3090 and RTX A6000. Check out [LLaVA-from-LLaMA-2](https://github.com/haotian-liu/LLaVA/blob/main/docs/LLaVA_from_LLaMA2.md), and our [model zoo](https://github.com/haotian-liu/LLaVA/blob/main/docs/MODEL_ZOO.md)!
 - [6/26] [CVPR 2023 Tutorial](https://vlp-tutorial.github.io/) on **Large Multimodal Models: Towards Building and Surpassing Multimodal GPT-4**!  Please check out [[Slides](https://datarelease.blob.core.windows.net/tutorial/vision_foundation_models_2023/slides/Chunyuan_cvpr2023_tutorial_lmm.pdf)] [[Notes](https://arxiv.org/abs/2306.14895)] [[YouTube](https://youtu.be/mkI7EPD1vp8)] [[Bilibli](https://www.bilibili.com/video/BV1Ng4y1T7v3/)].
-- [6/11] We released the preview for the most requested feature: DeepSpeed and LoRA support!  Please see documentations [here](./docs/LoRA.md).
+- [6/11] We released the preview for the most requested feature: DeepSpeed and LoRA support!  Please see documentations [here](https://github.com/haotian-liu/LLaVA/blob/main/docs/LoRA.md).
 - [6/1] We released **LLaVA-Med: Large Language and Vision Assistant for Biomedicine**, a step towards building biomedical domain large language and vision models with GPT-4 level capabilities.  Checkout the [paper](https://arxiv.org/abs/2306.00890) and [page](https://github.com/microsoft/LLaVA-Med).
 - [5/6] We are releasing [LLaVA-Lighting-MPT-7B-preview](https://huggingface.co/liuhaotian/LLaVA-Lightning-MPT-7B-preview), based on MPT-7B-Chat!  See [here](#LLaVA-MPT-7b) for more details.
 - [5/2] 🔥 We are releasing LLaVA-Lighting!  Train a lite, multimodal GPT-4 with just $40 in 3 hours!  See [here](#train-llava-lightning) for more details.
@@ -183,7 +256,7 @@ flowchart BT
     subgraph Demo Connections
         direction BT
         c<-->gws
-        
+
         mw7b<-->c
         mw13b<-->c
         lsglw13b<-->c
@@ -434,14 +507,14 @@ If you find LLaVA useful for your research and applications, please cite using t
 }
 
 @misc{liu2023improvedllava,
-      title={Improved Baselines with Visual Instruction Tuning}, 
+      title={Improved Baselines with Visual Instruction Tuning},
       author={Liu, Haotian and Li, Chunyuan and Li, Yuheng and Lee, Yong Jae},
       publisher={arXiv:2310.03744},
       year={2023},
 }
 
 @misc{liu2023llava,
-      title={Visual Instruction Tuning}, 
+      title={Visual Instruction Tuning},
       author={Liu, Haotian and Li, Chunyuan and Wu, Qingyang and Lee, Yong Jae},
       publisher={NeurIPS},
       year={2023},
@@ -461,3 +534,5 @@ If you find LLaVA useful for your research and applications, please cite using t
 For future project ideas, please check out:
 - [SEEM: Segment Everything Everywhere All at Once](https://github.com/UX-Decoder/Segment-Everything-Everywhere-All-At-Once)
 - [Grounded-Segment-Anything](https://github.com/IDEA-Research/Grounded-Segment-Anything) to detect, segment, and generate anything by marrying [Grounding DINO](https://github.com/IDEA-Research/GroundingDINO) and [Segment-Anything](https://github.com/facebookresearch/segment-anything).
+
+</details>

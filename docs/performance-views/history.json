@@ -1,0 +1,160 @@
+{
+  "hardware": "4 H20 GPUs; per-GPU batch 16; accumulation 2; global batch 128",
+  "scope": "Cumulative optimization configurations; optimizer-step timings. The x axis has 28 steps: rounds 1-52 contribute only their 11 accepted speedup points (steps 1-11; the two lower full re-checks at steps 6-7 are omitted), and rounds 53-69 take one step each (steps 12-28), as in the ResearchBoost blog. check = \"full\" is a full check (all four gates); check = \"quick\" is a timing screen plus quick check against the frozen reference, not a full check. Steps 1-4 come from the autonomous phase (rounds 1-24); from round 28 the owner allowed reassigning samples within an optimizer step and global token-level loss normalization.",
+  "rows": [
+    {
+      "candidate_ms": 20002.4,
+      "speedup": 1.0483,
+      "label": "ZeRO-3 parameter persistence",
+      "step": 1,
+      "round": "R8",
+      "check": "quick"
+    },
+    {
+      "candidate_ms": 19193.4,
+      "speedup": 1.0925,
+      "label": "Apex fused RMSNorm",
+      "step": 2,
+      "round": "R15",
+      "check": "quick"
+    },
+    {
+      "candidate_ms": 19183.5,
+      "speedup": 1.093,
+      "label": "BF16 reduced-precision reduction",
+      "step": 3,
+      "round": "R16",
+      "check": "quick"
+    },
+    {
+      "candidate_ms": 19178.0,
+      "speedup": 1.0947,
+      "label": "Full check of the round-16 configuration",
+      "step": 4,
+      "round": "autonomous-phase end",
+      "check": "full",
+      "reference_ms": 20994.6
+    },
+    {
+      "candidate_ms": 15797.4,
+      "speedup": 1.3273,
+      "label": "Group micro-batches by token length",
+      "step": 5,
+      "round": "R31",
+      "check": "quick"
+    },
+    {
+      "candidate_ms": 15790.6,
+      "speedup": 1.3279,
+      "label": "Worker-safe global token denominator",
+      "step": 8,
+      "round": "R46",
+      "check": "quick"
+    },
+    {
+      "candidate_ms": 15070.7,
+      "speedup": 1.3913,
+      "label": "MLP on valid rows only",
+      "step": 9,
+      "round": "R47",
+      "check": "quick"
+    },
+    {
+      "candidate_ms": 14183.0,
+      "speedup": 1.4784,
+      "label": "Retain last 8 activation layers",
+      "step": 10,
+      "round": "R48",
+      "check": "quick"
+    },
+    {
+      "candidate_ms": 14006.0,
+      "speedup": 1.4971,
+      "label": "Triton cache no longer draws from the global RNG",
+      "step": 11,
+      "round": "R50",
+      "check": "quick"
+    },
+    {
+      "reference_ms": 20938.0,
+      "candidate_ms": 12974.6,
+      "speedup": 1.6138,
+      "label": "Token-balanced microsteps",
+      "step": 12,
+      "round": "R53",
+      "check": "full"
+    },
+    {
+      "reference_ms": 20941.0,
+      "candidate_ms": 10953.3,
+      "speedup": 1.9118,
+      "label": "Retain 15 activation layers",
+      "step": 16,
+      "round": "R57",
+      "check": "full"
+    },
+    {
+      "reference_ms": 20934.3,
+      "candidate_ms": 10314.0,
+      "speedup": 2.0297,
+      "label": "Packed decoder + retain 17",
+      "step": 17,
+      "round": "R58",
+      "check": "full"
+    },
+    {
+      "reference_ms": 20941.8,
+      "candidate_ms": 9900.4,
+      "speedup": 2.1152,
+      "label": "SwiGLU backward recomputation",
+      "step": 19,
+      "round": "R60",
+      "check": "full"
+    },
+    {
+      "reference_ms": 20944.4,
+      "candidate_ms": 9478.1,
+      "speedup": 2.2098,
+      "label": "Memory-efficient RMSNorm",
+      "step": 20,
+      "round": "R61",
+      "check": "full"
+    },
+    {
+      "reference_ms": 20952.3,
+      "candidate_ms": 9212.8,
+      "speedup": 2.2743,
+      "label": "Packed Liger RoPE",
+      "step": 22,
+      "round": "R63",
+      "check": "full"
+    },
+    {
+      "reference_ms": 20921.2,
+      "candidate_ms": 9116.1,
+      "speedup": 2.295,
+      "label": "Standalone Liger cross-entropy",
+      "step": 24,
+      "round": "R65",
+      "check": "full"
+    },
+    {
+      "reference_ms": 20936.0,
+      "candidate_ms": 8974.0,
+      "speedup": 2.333,
+      "label": "Chunked-head tail fix",
+      "step": 26,
+      "round": "R67",
+      "check": "full"
+    },
+    {
+      "reference_ms": 20934.2,
+      "candidate_ms": 8777.1,
+      "speedup": 2.3851,
+      "label": "Step-wide balance + retain 32",
+      "step": 28,
+      "round": "R69",
+      "check": "full"
+    }
+  ]
+}
