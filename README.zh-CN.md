@@ -2,13 +2,13 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-**在 H20 GPU 上，LLaVA-1.5-7B 训练步速度达到基准的 2.39 倍，由 AI 智能体完成优化。**
+**在 H20 GPU 上，LLaVA-1.5-7B 训练步速度达到基线的 2.39 倍，由 AI 智能体完成优化。**
 
 ![Faster-LLaVA：四张 H20 上训练步加速 2.39 倍](docs/performance-views/01-h20-benchmark.svg)
 
 | 实现 | 每个优化器步耗时（ms）↓ | 加速比 ↑ |
 |---|---:|---:|
-| 参考实现 | 20,934.2 | 1.00× |
+| 基线 | 20,934.2 | 1.00× |
 | **Faster-LLaVA** | **8,777.1** | **2.39×** |
 
 短程 benchmark 使用 **4×H20**，每卡 batch 16、梯度累积 2，全局 batch **128**，BF16 / TF32 / ZeRO-3。这是训练步测速，不是完整训练的端到端加速比。

@@ -8,7 +8,7 @@
 
 | Implementation | Time / optimizer step (ms) ↓ | Speedup ↑ |
 |---|---:|---:|
-| Reference | 20,934.2 | 1.00× |
+| Baseline | 20,934.2 | 1.00× |
 | **Faster-LLaVA** | **8,777.1** | **2.39×** |
 
 Measured in a short benchmark on **4×H20**, batch 16 per GPU, accumulation 2.
