@@ -64,6 +64,10 @@ ScienceQA uses the original 2023 environment; SEED includes all 19,242 questions
 
 See the [H20 results and evaluation protocol](docs/h20-results.md). A matched full-run H20 baseline has not been completed; the 2.39× headline comes from the separate four-GPU benchmark above.
 
+## TPU v6e (experimental)
+
+On **64 TPU v6e chips** (torch_xla 2.9.0), the LLaVA-1.5-7B training step goes from **1931 ms to 1134 ms (1.70×)** with Pallas splash attention and a static image splice. It was measured baseline–candidate–baseline at global batch 128 (2 samples per chip), with fp32 master weights and gradient clipping, a randomly initialized language model and synthetic 2,623-token samples. The combination passed a 120-step paired-seed statistical gate. These numbers are not comparable with the H20 results above and make no claim about training quality. See [TPU v6e results](docs/tpu-v6e-results.md) and the [TPU scripts](tpu_smoke/README.md).
+
 ## Upstream LLaVA documentation
 
 Based on [haotian-liu/LLaVA](https://github.com/haotian-liu/LLaVA), by Haotian Liu, Chunyuan Li, Yuheng Li and Yong Jae Lee. [LLaVA-1.5 paper](https://arxiv.org/abs/2310.03744) · [Project page](https://llava-vl.github.io/) · [Apache-2.0 license](LICENSE).
