@@ -13,6 +13,8 @@
 
 Measured in a short benchmark on **4×H20**, batch 16 per GPU, accumulation 2.
 
+**RTX 50 series:** training steps 4.46× faster than upstream LLaVA on 8×RTX 5080 (16 GB), with RoundPipe; see [README_5080.md](README_5080.md).
+
 ## Quick Start
 
 Prepare the [environment, public data and model weights](docs/training.md). **Before the first trial run, have your agent check available GPU memory and adjust microbatch size and gradient accumulation** following the [memory adaptation guide](docs/training.md#memory). The default stage-two fine-tuning configuration uses **8 GPUs**, 16 examples per GPU and global batch 128:

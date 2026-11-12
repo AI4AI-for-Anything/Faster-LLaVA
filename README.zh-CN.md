@@ -13,6 +13,8 @@
 
 短程 benchmark 使用 **4×H20**，每卡 batch 16、梯度累积 2，全局 batch **128**，BF16 / TF32 / ZeRO-3。这是训练步测速，不是完整训练的端到端加速比。
 
+**RTX 50 系列：** 借助 RoundPipe，在 8×RTX 5080（16 GB）上训练步比上游 LLaVA 快 4.46 倍，见 [README_5080.md](README_5080.md)（英文）。
+
 ## 快速开始
 
 先准备[环境、公开数据和模型权重](docs/training.md)。**首次试跑前，让 agent 检查可用显存，并按[显存适配说明](docs/training.md#memory)调整 microbatch 和梯度累积。** 第二阶段全参数微调默认使用 **8 张 GPU**，每卡 batch 16，全局 batch 128：

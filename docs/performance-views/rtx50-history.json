@@ -1,0 +1,20 @@
+{
+  "hardware": "8 RTX 5080 GPUs (16 GB, PCIe, no P2P); one RoundPipe process; global batch 128",
+  "scope": "Time per optimizer step of LLaVA-1.5-7B stage two on the fixed 18-step timing fixture (docs/rtx50-results.md). check = \"screen\": mean of steps 3-10 of a 10-step run under the profiling harness (rtx50-judge/tools/run_prof.sh); check = \"formal\": bench.py time, mean of the two 8-step windows (steps 3-10, 11-18), two runs. Only accepted changes are listed; rejected ones are in docs/rtx50-results.md. Speedups are against the upstream LLaVA recipe on the same 8 GPUs.",
+  "baselines": {
+    "upstream_ms": 51231.4,
+    "upstream_runs_ms": [51409.0, 51049.3, 51236.0],
+    "faster_llava_ms": 28277.3,
+    "faster_llava_runs_ms": [28726.1, 27828.4]
+  },
+  "rows": [
+    {"step": 1, "round": "R01", "label": "RoundPipe port, RoundPipe's own stage planner, 9 microbatches", "candidate_ms": 13424.0, "check": "screen",
+     "note": "steps 3 and 5-8 of p01; the re-plan steps (2: 24.0 s, 4: 39.1 s) are excluded"},
+    {"step": 2, "round": "R02", "label": "Fixed stage plan (3 forward, 1 backward layer per stage)", "candidate_ms": 13240.0, "check": "screen"},
+    {"step": 3, "round": "R02", "label": "17 microbatches (2 x GPUs + 1)", "candidate_ms": 12210.0, "check": "screen"},
+    {"step": 4, "round": "R02", "label": "Lighter first stage: vision prefix + 2 decoder layers", "candidate_ms": 11850.0, "check": "screen"},
+    {"step": 5, "round": "R03", "label": "Fused RMSNorm (F.rms_norm)", "candidate_ms": 11280.0, "check": "screen"},
+    {"step": 6, "round": "R04-R05", "label": "Packed layer metadata; RoundPipe optimizer-thread fix; formal timing", "candidate_ms": 11474.6, "check": "formal",
+     "runs_ms": [11519.1, 11430.1]}
+  ]
+}

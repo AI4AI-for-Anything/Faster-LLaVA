@@ -140,7 +140,81 @@ def modulemap():
     save(fig, ROOT.parent/'change-views/module-map')
 
 
+def rtx50_hero():
+    data = json.loads((ROOT/'rtx50-history.json').read_text())
+    base, final = data['baselines'], data['rows'][-1]
+    names = ['Upstream LLaVA', 'Faster-LLaVA (H20 recipe)', 'RTX 50 recipe']
+    values = [base['upstream_ms'], base['faster_llava_ms'], final['candidate_ms']]
+    assert all(math.isfinite(v) and v > 0 for v in values)
+    fig = plt.figure(figsize=(9, 4.5), facecolor='white')
+    fig.text(.06, .88, 'Faster-LLaVA on RTX 50 series GPUs', color=RED, weight='bold', fontsize=19)
+    fig.text(.06, .78, 'LLaVA-1.5-7B · 8 RTX 5080 (16 GB) · global batch 128 · BF16 / TF32 · RoundPipe',
+             color=MUTED, fontsize=10.5)
+    ax = fig.add_axes([.30, .24, .36, .45])
+    ys = [2, 1, 0]
+    ax.barh(ys, values, color=['#D7BDBF', '#D7BDBF', RED], height=.26, zorder=3)
+    ax.set_yticks(ys, names)
+    for y, value in zip(ys, values):
+        ax.text(value+900, y, f'{value:,.0f} ms', va='center', color=INK, fontsize=11.5, weight='bold')
+    ax.set_xlim(0, 70000)
+    ax.set_ylim(-.6, 2.6)
+    ax.set_xticks([0, 20000, 40000])
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f'{value:,.0f}'))
+    frame(ax, 'x')
+    ax.tick_params(labelsize=10)
+    ax.set_xlabel('Time per optimizer step (ms) ↓', color=MUTED, labelpad=12, fontsize=11)
+    fig.text(.86, .54, f"{values[0]/values[2]:.2f}×", color=RED, fontsize=35, weight='bold', ha='center')
+    fig.text(.86, .43, 'vs upstream LLaVA', color=MUTED, fontsize=12, ha='center')
+    fig.text(.86, .36, f"{values[1]/values[2]:.2f}× vs Faster-LLaVA", color=MUTED, fontsize=10.5, ha='center')
+    save(fig, ROOT/'03-rtx50-benchmark')
+
+
+def rtx50_history():
+    data = json.loads((ROOT/'rtx50-history.json').read_text())
+    rows, upstream = data['rows'], data['baselines']['upstream_ms']
+    fig = plt.figure(figsize=(9, 8.2), facecolor='white')
+    fig.text(.09, .96, 'Faster-LLaVA · RTX 50 series', fontsize=11, weight='bold', color=RED)
+    fig.text(.09, .913, 'Agent Optimization History', fontsize=21.5, weight='bold', color=INK)
+    fig.text(.94, .928, f"{upstream/rows[-1]['candidate_ms']:.2f}×", fontsize=29, ha='right', weight='bold', color=RED)
+    fig.text(.94, .902, 'vs upstream LLaVA', fontsize=10.5, ha='right', color=MUTED)
+    fig.text(.09, .855, f'Time per optimizer step · 8 RTX 5080 GPUs · global batch 128 · {len(rows)} accepted steps',
+             fontsize=11, color=MUTED)
+    ax = fig.add_axes([.09, .55, .85, .27])
+    x = [row['step'] for row in rows]
+    values = [row['candidate_ms'] / 1000 for row in rows]
+    ax.plot(x, values, color=RED, linewidth=2.3, zorder=2)
+    for row, value in zip(rows, values):
+        ax.plot([row['step']], [value], marker='o', markersize=6.5, zorder=3, color=RED,
+                markerfacecolor=RED if row['check'] == 'formal' else 'white', markeredgewidth=1.8)
+        ax.annotate(f'{value:.2f} s', (row['step'], value), xytext=(0, 11), textcoords='offset points',
+                    ha='center', fontsize=11.5, color=RED if row is rows[-1] else INK, weight='bold')
+    ax.set_xticks(x, [str(step) for step in x])
+    ax.set_ylim(10.5, 14.2)
+    ax.set_xlim(.5, len(rows) + .5)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f'{value:.0f} s'))
+    frame(ax)
+    for i, row in enumerate(rows):
+        cx, cy = .09+(i % 2)*.44, .44-(i // 2)*.105
+        fig.add_artist(FancyBboxPatch((cx, cy-.05), .41, .08,
+                       boxstyle='round,pad=0.004,rounding_size=0.007',
+                       transform=fig.transFigure, facecolor=CARD, edgecolor='none'))
+        fig.text(cx+.014, cy-.009, str(row['step']), fontsize=12, weight='bold', color=RED)
+        label = textwrap.fill(row['label'], width=34, break_long_words=False, break_on_hyphens=False)
+        fig.text(cx+.05, cy-.009, label, fontsize=10.5, color=INK, weight='bold', va='center', linespacing=1.35)
+    fig.text(.09, .05, f"Upstream LLaVA on the same GPUs: {upstream/1000:.1f} s per step; "
+             f"Faster-LLaVA's H20 recipe: {data['baselines']['faster_llava_ms']/1000:.1f} s.",
+             fontsize=9.5, color=MUTED)
+    fig.text(.09, .025, 'Open: 10-step screen (steps 3-10). Filled: formal bench timing, two runs. '
+             'Rejected attempts are listed in docs/rtx50-results.md.', fontsize=9, color=MUTED)
+    save(fig, ROOT/'04-rtx50-history')
+
+
 if __name__ == '__main__':
-    hero()
-    history()
-    modulemap()
+    import sys
+    if sys.argv[1:] == ['rtx50']:  # the RTX 50 figures only; the H20 figures stay as published
+        rtx50_hero()
+        rtx50_history()
+    else:
+        hero()
+        history()
+        modulemap()
