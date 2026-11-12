@@ -11,7 +11,10 @@ model as ``nn.Sequential``; this module provides that view of an existing
 A microbatch is packed: the expanded token rows of all its samples are
 concatenated (no padding) and attention runs per sample through ``cu_seqlens``.
 The layout is built on the host by :func:`pack_microbatch`, so the GPU stages do
-no host synchronisation.  Layers pass ``(hidden, meta)`` to each other.
+no host synchronisation.  Layers pass ``(hidden, meta)`` to each other; RoundPipe
+moves every tensor of that state through host memory at each stage boundary, so
+the integer metadata travels as one int32 tensor (``meta_ints``: cu_seqlens,
+positions, label rows, label ids) sliced by the sizes in ``meta_sizes``.
 
 RoundPipe drives every GPU from Python threads of one process, so the host cost
 of each kernel launch is shared by all GPUs.  Two switches (off by default, read
@@ -86,14 +89,27 @@ def pack_microbatch(instances: Sequence[Dict], image_tokens: int, max_length: in
         cu.append(offset)
         max_seqlen = max(max_seqlen, length)
     cat = lambda xs: torch.cat(xs) if xs else torch.zeros(0, dtype=torch.long)
+    cu_seqlens = torch.tensor(cu, dtype=torch.int32)
+    position_ids, label_rows, label_ids = cat(positions), cat(label_rows), cat(label_ids)
+    meta = (cu_seqlens, position_ids, label_rows, label_ids)
     return dict(
         input_ids=cat(text_ids), text_rows=cat(text_rows),
         images=torch.stack(images).to(image_dtype) if images else torch.zeros(0, dtype=image_dtype),
         image_rows=cat(image_rows), image_feature_rows=cat(kept_image_rows),
-        position_ids=cat(positions), label_rows=cat(label_rows), label_ids=cat(label_ids),
-        cu_seqlens=torch.tensor(cu, dtype=torch.int32), max_seqlen=max_seqlen,
-        num_rows=offset,
+        position_ids=position_ids, label_rows=label_rows, label_ids=label_ids,
+        cu_seqlens=cu_seqlens, max_seqlen=max_seqlen, num_rows=offset,
+        meta_ints=torch.cat([t.to(torch.int32) for t in meta]),
+        meta_sizes=tuple(len(t) for t in meta),
     )
+
+
+def _meta_slices(ints, sizes):
+    """cu_seqlens, positions, label rows, label ids: views of the packed int32 metadata."""
+    out, start = [], 0
+    for size in sizes:
+        out.append(ints[start:start + size])
+        start += size
+    return out
 
 
 def split_balanced(lengths: Sequence[int], num_microbatch: int) -> List[List[int]]:
@@ -124,8 +140,8 @@ class LlavaPrefix(nn.Module):
             half = sin.shape[-1] // 2
             # rotate_half(x) * sin == roll(x, half) * sin_signed: the sign moves exactly.
             sin_signed = torch.cat((-sin[:, :half], sin[:, half:]), dim=-1)
-            self.register_buffer('rope_cos', cos.detach().clone(), persistent=False)
-            self.register_buffer('rope_sin_signed', sin_signed.detach().clone(), persistent=False)
+            self.register_buffer('rope_table', torch.stack((cos, sin_signed)).detach().clone(),
+                                 persistent=False)
 
     def forward(self, batch):
         from roundpipe import doing_recompute, get_recompute_data, save_for_recompute
@@ -145,12 +161,10 @@ class LlavaPrefix(nn.Module):
             projected = self.mm_projector(features).flatten(0, 1)
             projected = projected.index_select(0, batch['image_feature_rows'])
             hidden = hidden.index_copy(0, batch['image_rows'], projected)
-        meta = (batch['cu_seqlens'], batch['max_seqlen'], batch['position_ids'],
-                batch['label_rows'], batch['label_ids'])
-        if self.hoist_rope:
-            positions = batch['position_ids']
-            meta += (self.rope_cos.index_select(0, positions).unsqueeze(1),
-                     self.rope_sin_signed.index_select(0, positions).unsqueeze(1))
+        meta = (batch['meta_ints'], batch['max_seqlen'], batch['meta_sizes'])
+        if self.hoist_rope:  # [2, rows, 1, head_dim]: cos and pre-signed sin of every row
+            positions = _meta_slices(*meta[::2])[1]
+            meta += (self.rope_table.index_select(1, positions).unsqueeze(2),)
         return hidden, meta
 
 
@@ -187,14 +201,15 @@ class PackedDecoderLayer(nn.Module):
 
     def forward(self, state):
         hidden, meta = state
-        cu_seqlens, max_seqlen, positions = meta[:3]
+        cu_seqlens, positions = _meta_slices(meta[0], meta[2])[:2]
+        max_seqlen = meta[1]
         layer, attn = self.layer, self.layer.self_attn
         x = _rms_norm(layer.input_layernorm, hidden, self.fused_rms_norm)
         q = attn.q_proj(x).view(-1, attn.num_heads, attn.head_dim)
         k = attn.k_proj(x).view(-1, attn.num_key_value_heads, attn.head_dim)
         v = attn.v_proj(x).view(-1, attn.num_key_value_heads, attn.head_dim)
-        if len(meta) > 5:  # rotary rows gathered once per microbatch by the prefix
-            cos, sin_signed = meta[5], meta[6]
+        if len(meta) > 3:  # rotary rows gathered once per microbatch by the prefix
+            cos, sin_signed = meta[3][0], meta[3][1]
             half = attn.head_dim // 2
             q = q * cos + torch.roll(q, half, -1) * sin_signed
             k = k * cos + torch.roll(k, half, -1) * sin_signed
@@ -219,10 +234,10 @@ class PackedHeadLoss(nn.Module):
 
     def forward(self, state):
         hidden, meta = state
-        label_rows, label_ids = meta[3], meta[4]
+        label_rows, label_ids = _meta_slices(meta[0], meta[2])[2:]
         hidden = _rms_norm(self.norm, hidden.index_select(0, label_rows), self.fused_rms_norm)
         logits = self.lm_head(hidden).float()
-        return F.cross_entropy(logits, label_ids, reduction='sum')
+        return F.cross_entropy(logits, label_ids.long(), reduction='sum')
 
 
 def to_sequential(model) -> nn.Sequential:
