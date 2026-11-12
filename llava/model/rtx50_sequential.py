@@ -12,7 +12,17 @@ A microbatch is packed: the expanded token rows of all its samples are
 concatenated (no padding) and attention runs per sample through ``cu_seqlens``.
 The layout is built on the host by :func:`pack_microbatch`, so the GPU stages do
 no host synchronisation.  Layers pass ``(hidden, meta)`` to each other.
+
+RoundPipe drives every GPU from Python threads of one process, so the host cost
+of each kernel launch is shared by all GPUs.  Two switches (off by default, read
+when the view is built) cut launches per layer with ATen-level launch cost:
+``LLAVA_RTX50_FUSED_RMSNORM=1`` runs the RMSNorms as ``F.rms_norm`` (one fused
+kernel each way instead of about a dozen; the weight is applied before the
+single bf16 rounding), and ``LLAVA_RTX50_HOIST_ROPE=1`` gathers the rotary rows
+once per microbatch in the prefix and rotates with ``roll`` and a pre-signed sine
+(bitwise identical to ``apply_rotary_pos_emb``).
 """
+import os
 from typing import Dict, List, Sequence
 
 import torch
@@ -100,12 +110,22 @@ def split_balanced(lengths: Sequence[int], num_microbatch: int) -> List[List[int
 class LlavaPrefix(nn.Module):
     """CLIP (frozen), projector and token embedding into the packed rows."""
 
-    def __init__(self, model):
+    def __init__(self, model, rope_extent: int = 0):
         super().__init__()
         self.embed_tokens = model.get_model().embed_tokens
         self.vision_tower = model.get_vision_tower()
         self.mm_projector = model.get_model().mm_projector
         self.hidden_size = model.config.hidden_size
+        self.hoist_rope = rope_extent > 0
+        if self.hoist_rope:
+            # The tables every layer would read: rotary_emb(x, seq_len) in the model dtype.
+            rotary = model.get_model().layers[0].self_attn.rotary_emb
+            cos, sin = rotary(model.get_model().embed_tokens.weight[:1], seq_len=rope_extent)
+            half = sin.shape[-1] // 2
+            # rotate_half(x) * sin == roll(x, half) * sin_signed: the sign moves exactly.
+            sin_signed = torch.cat((-sin[:, :half], sin[:, half:]), dim=-1)
+            self.register_buffer('rope_cos', cos.detach().clone(), persistent=False)
+            self.register_buffer('rope_sin_signed', sin_signed.detach().clone(), persistent=False)
 
     def forward(self, batch):
         from roundpipe import doing_recompute, get_recompute_data, save_for_recompute
@@ -127,6 +147,10 @@ class LlavaPrefix(nn.Module):
             hidden = hidden.index_copy(0, batch['image_rows'], projected)
         meta = (batch['cu_seqlens'], batch['max_seqlen'], batch['position_ids'],
                 batch['label_rows'], batch['label_ids'])
+        if self.hoist_rope:
+            positions = batch['position_ids']
+            meta += (self.rope_cos.index_select(0, positions).unsqueeze(1),
+                     self.rope_sin_signed.index_select(0, positions).unsqueeze(1))
         return hidden, meta
 
 
@@ -141,42 +165,63 @@ def _varlen_attention(q, k, v, cu_seqlens, max_seqlen):
                        window_size=(-1, 0))
 
 
+def _rms_norm(norm, hidden, fused: bool):
+    if not fused:
+        return norm(hidden)
+    return F.rms_norm(hidden, norm.weight.shape, norm.weight, norm.variance_epsilon)
+
+
+def _fast_path_switches():
+    return (os.environ.get('LLAVA_RTX50_FUSED_RMSNORM') == '1',
+            os.environ.get('LLAVA_RTX50_HOIST_ROPE') == '1')
+
+
 class PackedDecoderLayer(nn.Module):
     """One ``LlamaDecoderLayer`` on packed rows (same math as ``packed_decoder.py``)."""
 
-    def __init__(self, layer, rope_extent: int):
+    def __init__(self, layer, rope_extent: int, fused_rms_norm: bool = False):
         super().__init__()
         self.layer = layer
         self.rope_extent = rope_extent
+        self.fused_rms_norm = fused_rms_norm
 
     def forward(self, state):
         hidden, meta = state
         cu_seqlens, max_seqlen, positions = meta[:3]
         layer, attn = self.layer, self.layer.self_attn
-        x = layer.input_layernorm(hidden)
+        x = _rms_norm(layer.input_layernorm, hidden, self.fused_rms_norm)
         q = attn.q_proj(x).view(-1, attn.num_heads, attn.head_dim)
         k = attn.k_proj(x).view(-1, attn.num_key_value_heads, attn.head_dim)
         v = attn.v_proj(x).view(-1, attn.num_key_value_heads, attn.head_dim)
-        cos, sin = attn.rotary_emb(v, seq_len=self.rope_extent)
-        q, k = llama.apply_rotary_pos_emb(q, k, cos, sin, positions, unsqueeze_dim=1)
+        if len(meta) > 5:  # rotary rows gathered once per microbatch by the prefix
+            cos, sin_signed = meta[5], meta[6]
+            half = attn.head_dim // 2
+            q = q * cos + torch.roll(q, half, -1) * sin_signed
+            k = k * cos + torch.roll(k, half, -1) * sin_signed
+        else:
+            cos, sin = attn.rotary_emb(v, seq_len=self.rope_extent)
+            q, k = llama.apply_rotary_pos_emb(q, k, cos, sin, positions, unsqueeze_dim=1)
         x = _varlen_attention(q, k, v, cu_seqlens, max_seqlen)
         hidden = hidden + attn.o_proj(x.reshape(-1, attn.hidden_size))
-        hidden = hidden + layer.mlp(layer.post_attention_layernorm(hidden))
+        x = _rms_norm(layer.post_attention_layernorm, hidden, self.fused_rms_norm)
+        hidden = hidden + layer.mlp(x)
         return hidden, meta
 
 
 class PackedHeadLoss(nn.Module):
     """Final norm, LM head and summed cross-entropy over supervised rows only."""
 
-    def __init__(self, model):
+    def __init__(self, model, fused_rms_norm: bool = False):
         super().__init__()
         self.norm = model.get_model().norm
         self.lm_head = model.lm_head
+        self.fused_rms_norm = fused_rms_norm
 
     def forward(self, state):
         hidden, meta = state
         label_rows, label_ids = meta[3], meta[4]
-        logits = self.lm_head(self.norm(hidden.index_select(0, label_rows))).float()
+        hidden = _rms_norm(self.norm, hidden.index_select(0, label_rows), self.fused_rms_norm)
+        logits = self.lm_head(hidden).float()
         return F.cross_entropy(logits, label_ids, reduction='sum')
 
 
@@ -188,7 +233,8 @@ def to_sequential(model) -> nn.Sequential:
         raise ValueError('RTX 50 recipe supports the LLaVA-1.5 flat image features only')
     # Cover every position of a truncated sample, as the padded upstream path does.
     rope_extent = max(model.config.max_position_embeddings, getattr(model.config, 'tokenizer_model_max_length', 0) or 0)
-    layers = [LlavaPrefix(model)]
-    layers += [PackedDecoderLayer(layer, rope_extent) for layer in model.get_model().layers]
-    layers.append(PackedHeadLoss(model))
+    fused_rms_norm, hoist_rope = _fast_path_switches()
+    layers = [LlavaPrefix(model, rope_extent if hoist_rope else 0)]
+    layers += [PackedDecoderLayer(layer, rope_extent, fused_rms_norm) for layer in model.get_model().layers]
+    layers.append(PackedHeadLoss(model, fused_rms_norm))
     return nn.Sequential(*layers)
