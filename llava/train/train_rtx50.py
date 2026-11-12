@@ -42,6 +42,10 @@ class RTX50Arguments:
                 'samples, grouped exactly as that recipe groups them.'})
     num_microbatch: int = field(default=0, metadata={
         'help': 'RoundPipe microbatches per optimizer step (token-balanced); 0 = GPU count + 1.'})
+    stage_plan: str = field(default='auto', metadata={
+        'help': "'auto' lets RoundPipe re-plan stages from measured layer times; 'F,B[,P]' fixes "
+                'forward stages of F decoder layers and backward stages of B decoder layers; P '
+                '(default F) decoder layers share the first forward stage with the vision prefix.'})
 
 
 def unsupported(model_args, data_args, training_args):
@@ -151,6 +155,34 @@ class PackSteps:
                     num_labels=sum(int(mb['label_ids'].numel()) for mb in microbatches))
 
 
+def fixed_stage_plan(spec, num_layers):
+    """RoundPipe plan for [prefix, decoder x N, head] with uniform decoder stages.
+
+    Forward stages take ``F`` decoder layers each, except the first, where ``P``
+    decoder layers (default ``F``) join the vision prefix (CLIP's forward costs
+    about one decoder layer); the fused forward-backward stage is the head alone;
+    backward stages take ``B`` decoder layers each, deepest first, and the prefix
+    joins the last.  ``F,B = 3,1`` is the shape RoundPipe's planner settles on,
+    without its re-planning during a run.
+    """
+    from roundpipe import ModelExecutePlan
+    counts = [int(x) for x in spec.split(',')]
+    if len(counts) not in (2, 3) or min(counts) < 1:
+        raise ValueError(f'stage_plan {spec!r}: expected F,B or F,B,P with positive counts')
+    fwd, bwd, first = counts + counts[:1] if len(counts) == 2 else counts
+    head = num_layers - 1
+    plan = ModelExecutePlan()
+    first_end = min(1 + first, head)
+    plan.fwd_plan = [range(0, first_end)]
+    plan.fwd_plan += [range(s, min(s + fwd, head)) for s in range(first_end, head, fwd)]
+    plan.bwd_plan = [range(head, num_layers)]
+    for end in range(head, 1, -bwd):
+        start = max(end - bwd, 1)
+        plan.bwd_plan.append(range(0 if start == 1 else start, end))
+    plan.check_valid(num_layers, 'fused')
+    return plan
+
+
 def _by_microbatch(args, kwargs, num_microbatch):
     microbatches = args[0]
     assert len(microbatches) == num_microbatch
@@ -202,6 +234,7 @@ def train():
     from roundpipe import OptimizerCtx, RoundPipe, RoundPipeRunConfig
     from roundpipe.optim import Adam
     rp = RoundPipe(to_sequential(model), optim_dtype=torch.float32)
+    plan = None if rtx50_args.stage_plan == 'auto' else fixed_stage_plan(rtx50_args.stage_plan, rp.num_layers)
     with OptimizerCtx():
         named = list(rp.named_parameters())
     decay = [p for _, p in named if p.ndim >= 2]  # HF: no decay on biases and norms
@@ -238,7 +271,8 @@ def train():
         scheduler.step()
 
     print(f'[rtx50] {len(steps)} optimizer steps, starting at {start_step}; '
-          f'{num_microbatch} microbatches over {torch.cuda.device_count()} GPUs', flush=True)
+          f'{num_microbatch} microbatches over {torch.cuda.device_count()} GPUs; '
+          f'stage plan {plan if plan is not None else "auto"}', flush=True)
     for step in range(start_step, len(steps)):
         begin = time.perf_counter()
         batch = next(batches)
@@ -249,7 +283,7 @@ def train():
             input_args=(batch['microbatches'],),
             loss_fn=lambda total, _: total / num_labels,
             run_config=RoundPipeRunConfig(num_microbatch=len(batch['microbatches']),
-                                          split_input=_by_microbatch))
+                                          split_input=_by_microbatch, execute_plan=plan))
         computed = time.perf_counter()
         rp.step(optimizer_step, is_async=False)
         end = time.perf_counter()
