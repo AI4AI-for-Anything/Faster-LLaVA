@@ -33,6 +33,7 @@ python llava/train/train_rtx50.py \
   --num_train_epochs 1 \
   --per_device_train_batch_size "$MICROBATCH" --reference_world_size "$REFERENCE_GPUS" \
   --gradient_accumulation_steps "$GRAD_ACCUM" \
+  --stage_plan "${STAGE_PLAN}" --num_microbatch "${NUM_MICROBATCH}" \
   --save_strategy steps --save_steps 1000 --save_total_limit 1 \
   --learning_rate 2e-5 --weight_decay 0. --warmup_ratio 0.03 --lr_scheduler_type cosine \
   --max_grad_norm 0 \

@@ -41,7 +41,8 @@ class RTX50Arguments:
                 'per_device_train_batch_size x reference_world_size x gradient_accumulation_steps '
                 'samples, grouped exactly as that recipe groups them.'})
     num_microbatch: int = field(default=0, metadata={
-        'help': 'RoundPipe microbatches per optimizer step (token-balanced); 0 = GPU count + 1.'})
+        'help': 'RoundPipe microbatches per optimizer step (token-balanced); 0 = 2 x GPU count + 1 '
+                '(a count of one more than a multiple of the GPU count keeps the stages aligned).'})
     stage_plan: str = field(default='auto', metadata={
         'help': "'auto' lets RoundPipe re-plan stages from measured layer times; 'F,B[,P]' fixes "
                 'forward stages of F decoder layers and backward stages of B decoder layers; P '
@@ -222,7 +223,7 @@ def train():
                                    resume=str(resume) if resume else None)
     dataset = make_supervised_data_module(tokenizer=tokenizer, data_args=data_args)['train_dataset']
     steps = step_schedule(dataset, training_args, rtx50_args)
-    num_microbatch = rtx50_args.num_microbatch or torch.cuda.device_count() + 1
+    num_microbatch = rtx50_args.num_microbatch or 2 * torch.cuda.device_count() + 1
     image_tokens = model.get_vision_tower().num_patches
     collate = PackSteps(num_microbatch, image_tokens, tokenizer.model_max_length, tokenizer.pad_token_id)
     workers = training_args.dataloader_num_workers
