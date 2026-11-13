@@ -1,6 +1,6 @@
 # RTX 50 series results
 
-LLaVA-1.5-7B stage-two full fine-tuning on **8×RTX 5080 (16 GB)** with the [RTX 50 recipe](../scripts/train_rtx50_7b.sh): one process drives all GPUs through [RoundPipe](https://github.com/thustorage/RoundPipe), with parameters, gradients and AdamW state in host memory. This page records the timing protocol, the numerical checks and what is still pending. These results do **not** establish lossless acceleration.
+LLaVA-1.5-7B stage-two full fine-tuning on **8×RTX 5080 (16 GB)** with the [RTX 50 recipe](../scripts/train_rtx50_7b.sh): one process drives all GPUs through [RoundPipe](https://github.com/thustorage/RoundPipe), with parameters, gradients and AdamW state in host memory. This page records the timing protocol, the numerical checks and the one-epoch training and evaluation results. These results do **not** establish lossless acceleration.
 
 ## Time per optimizer step
 
@@ -45,7 +45,7 @@ RoundPipe launches the kernels of all eight GPUs from Python threads of one proc
 
 ### RoundPipe fixes
 
-The recipe depends on two bug fixes on RoundPipe's `fix/v0.1.2` branch:
+The recipe depends on two bug fixes on RoundPipe's `fix/v0.1.2` branch ([thustorage/RoundPipe#6](https://github.com/thustorage/RoundPipe/pull/6)):
 
 - the optimizer thread sized its OpenMP team from `torch.get_num_threads()` of a new thread, which is 1 once a `DataLoader(pin_memory=True)` has started; the CPU AdamW then ran on one thread (11–22 s per step instead of ≈ 4.5 s);
 - `import roundpipe` failed on hosts without a visible GPU.
@@ -58,7 +58,24 @@ The recipe depends on two bug fixes on RoundPipe's `fix/v0.1.2` branch:
 
 ## Full-training results
 
-Pending. One epoch on all 665,298 records (5,198 optimizer steps) with `scripts/train_rtx50_7b.sh` is running on 8×RTX 5080. GQA testdev, TextVQA val, POPE, ScienceQA-IMG and the SEED image questions will be evaluated with the upstream `scripts/v1_5/eval` protocol, next to the official LLaVA-v1.5-7B checkpoint rerun under the same protocol. The SEED video questions (5,009 of the historical 19,242) are not scored: the current SEED-Bench release ships different video frames. VizWiz, MMBench and MM-Vet are not scored locally.
+We completed **one epoch on all 665,298 instruction records** (5,198 optimizer steps, global batch 128) with `scripts/train_rtx50_7b.sh` on **8×RTX 5080**. Wall time was **17 h 25 min**, including start-up and five checkpoint saves (mean 11.91 s per step, median 11.50 s, no NaN steps). The run starts from Vicuna-7B plus the official stage-one projector. The comparison checkpoint is the released [official LLaVA-v1.5-7B](https://huggingface.co/liuhaotian/llava-v1.5-7b), evaluated on the same machine under the same protocol for each row.
+
+| Benchmark ↑ | Official checkpoint, same-protocol rerun | Our checkpoint |
+|---|---:|---:|
+| GQA testdev balanced | 61.97 | 62.32 |
+| TextVQA val 0.5.1 | 58.21 | 58.52 |
+| POPE macro F1 | 85.94 | 85.53 |
+| ScienceQA-IMG | 69.56 | 69.31 |
+| SEED image (14,233) | 66.19 | 66.84 |
+
+Protocol notes:
+
+- Upstream `scripts/v1_5/eval` settings (`model_vqa_loader` / `model_vqa_science`, greedy decoding, `vicuna_v1`, fp16), LLaVA `c121f04` evaluation code, one chunk per GPU. TextVQA and ScienceQA prompts exhaust a single 16 GB card, so for those two each chunk spans two GPUs (`load_pretrained_model(device_map="auto")`); decoding is per sample in every case.
+- GQA accuracy is computed as the official `eval.py` computes it (prediction equals answer over the 12,578 testdev-balanced questions), without the scene-graph and choices assets that script also loads. POPE is the mean F1 over the adversarial, popular and random splits.
+- SEED covers the 14,233 image questions of the historical 19,242-question set, scored with the current `SEED-Bench.json` answers; the 5,009 video questions are not scored because the current release ships different video frames.
+- ScienceQA runs in this repository's PyTorch 2.14 / Transformers 4.37.2 environment, not the original 2023 environment of the [H20 results](h20-results.md); the official checkpoint scores 69.56 here against the published 66.8.
+- VizWiz, MMBench and MM-Vet are not scored locally.
+- A matched full-run upstream baseline on 8×RTX 5080 was not run, so no end-to-end speedup is claimed; the 4.46× is the per-step benchmark above. These results do not establish lossless acceleration.
 
 ## Source and reproduction
 

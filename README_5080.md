@@ -46,6 +46,16 @@ See the [4-file change review](docs/change-views/rtx50-files.md) and the [RTX 50
 
 ## Full-training results
 
-Pending: one epoch on all 665,298 instruction records (5,198 optimizer steps) on 8×RTX 5080, then GQA, TextVQA, POPE, ScienceQA-IMG and SEED-image under the upstream evaluation protocol, next to the official LLaVA-v1.5-7B checkpoint rerun under the same protocol.
+We completed **one epoch on all 665,298 instruction records** on **8×RTX 5080**, global batch 128 and 5,198 optimizer steps, in **17 h 25 min** wall time. The run starts from Vicuna-7B plus the official stage-one projector. The comparison checkpoint is the released [official LLaVA-v1.5-7B](https://huggingface.co/liuhaotian/llava-v1.5-7b), evaluated on the same machine under the same protocol for each row.
+
+| Benchmark ↑ | Official checkpoint, same-protocol rerun | Our checkpoint |
+|---|---:|---:|
+| GQA testdev balanced | 61.97 | 62.32 |
+| TextVQA val 0.5.1 | 58.21 | 58.52 |
+| POPE macro F1 | 85.94 | 85.53 |
+| ScienceQA-IMG | 69.56 | 69.31 |
+| SEED image (14,233) | 66.19 | 66.84 |
+
+SEED covers its image questions only; ScienceQA runs in this repository's current environment (the official checkpoint scores 69.56 here against the published 66.8); VizWiz, MMBench and MM-Vet are not scored locally. A matched full-run upstream baseline on these GPUs was not run, so no end-to-end speedup is claimed.
 
 See the [RTX 50 results, protocol and numerical checks](docs/rtx50-results.md).
