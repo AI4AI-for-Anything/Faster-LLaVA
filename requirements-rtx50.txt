@@ -1,0 +1,29 @@
+# Environment for scripts/train_rtx50_7b.sh on RTX 50 series (sm_120) GPUs, as measured on 8x RTX 5080
+# (Python 3.12, NVIDIA driver 595 / CUDA 13.2). pyproject.toml keeps the H20 pins; install this
+# file instead and then the project without its dependencies:
+#
+#   pip install -r requirements-rtx50.txt
+#   pip install -e . --no-deps
+#
+# FlashAttention 2.8.3 is optional: build it from source for sm_120 (no wheel is published); without
+# it the packed layers use PyTorch's varlen attention (passes the same parity check; not timed). The
+# timings in docs/rtx50-results.md used FlashAttention.
+# These are the versions of the measured environment; a fresh installation from this file has not
+# been validated.
+--extra-index-url https://download.pytorch.org/whl/cu132
+torch==2.14.1
+torchvision==0.29.1
+transformers==4.37.2
+tokenizers==0.15.1
+sentencepiece==0.2.3
+accelerate==0.26.1
+shortuuid==1.0.13
+einops==0.6.1
+einops-exts==0.0.4
+timm==0.6.13
+numpy==2.5.4
+pillow==13.0.0
+protobuf==7.36.2
+ninja==1.13.2
+# RoundPipe v0.1.2 with the optimizer-thread and GPU-less import fixes (fix/v0.1.2, until a release has them)
+roundpipe @ git+https://github.com/thustorage/RoundPipe@d5ccafd3aeb11bad3a0e9d2773e0cdfa0a6b8f90
