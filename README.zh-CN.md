@@ -66,6 +66,10 @@ ScienceQA 使用原始 2023 环境；SEED 包含全部 19,242 道题；VizWiz �
 
 详细说明见 [H20 结果与评测口径](docs/h20-results.md)。当前没有完成配对的 H20 全训练基线；首页 2.39× 来自前述独立四卡 benchmark。
 
+## TPU v6e（实验性）
+
+在 **64 颗 TPU v6e 芯片**（torch_xla 2.9.0）上，用 Pallas splash attention 加静态图像拼接，LLaVA-1.5-7B 训练步从 **1931 ms 降到 1134 ms（1.70 倍）**。测量方式为基线、候选、基线交替，全局 batch 128（每芯 2 条），fp32 主权重加梯度裁剪；语言模型随机初始化，样本为合成的 2,623 token。这一组合通过了 120 步配对 seed 的统计检验。这些数字不能和上文的 H20 结果比较，也不说明训练质量。详见 [TPU v6e 结果](docs/tpu-v6e-results.md)（英文）和 [TPU 脚本](tpu_smoke/README.md)。
+
 ## 上游 LLaVA 文档
 
 本项目基于 [haotian-liu/LLaVA](https://github.com/haotian-liu/LLaVA)，原作者为 Haotian Liu、Chunyuan Li、Yuheng Li 和 Yong Jae Lee。[LLaVA-1.5 论文](https://arxiv.org/abs/2310.03744) · [项目主页](https://llava-vl.github.io/) · [Apache-2.0 许可证](LICENSE)。
